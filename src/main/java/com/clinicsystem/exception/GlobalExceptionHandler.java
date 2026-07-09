@@ -43,4 +43,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> forbidden(IllegalStateException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }
+
+
+
 }

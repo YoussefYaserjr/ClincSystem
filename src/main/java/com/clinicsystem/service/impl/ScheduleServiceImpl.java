@@ -36,8 +36,6 @@ public class ScheduleServiceImpl implements ScheduleService {
         Doctor doctor = doctorRepository.findById(doctorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found: " + doctorId));
 
-        // Overlap check: reject if any existing slot on the same day
-        // shares any time range with the requested one.
         List<Schedule> sameDay = scheduleRepository
                 .findByDoctorIdAndAvailableDate(doctorId, request.getAvailableDate());
 
@@ -59,13 +57,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .booked(false)
                 .build();
 
-        // The unique constraint on (doctor_id, available_date, start_time)
-        // is a second line of defense if two create-requests race here —
-        // the app-level overlap check above is read-then-write and not
-        // itself lock-protected, so a rare concurrent exact-duplicate
-        // insert is still possible; the DB constraint catches that case
-        // and DataIntegrityViolationException should be mapped in the
-        // global exception handler if you want a clean 409 instead of a 500.
         schedule = scheduleRepository.save(schedule);
 
         return toResponse(schedule);

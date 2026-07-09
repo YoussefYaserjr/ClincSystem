@@ -31,7 +31,6 @@ public class ScheduleController {
         return ResponseEntity.ok(scheduleService.create(doctorId, request));
     }
 
-    // Public: patients need to browse a doctor's open slots before booking.
     @GetMapping("/doctor/{doctorId}")
     public List<ScheduleResponse> availableSlots(
             @PathVariable Long doctorId,

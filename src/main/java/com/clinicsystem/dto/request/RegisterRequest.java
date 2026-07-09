@@ -1,4 +1,4 @@
-// dto/request/RegisterRequest.java
+
 package com.clinicsystem.dto.request;
 
 import com.clinicsystem.entity.enums.Role;
@@ -12,7 +12,7 @@ public class RegisterRequest {
     @Email @NotBlank private String email;
     @NotBlank @Size(min = 8) private String password;
     private String phone;
-    @NotNull
+   // @NotNull
     private Role role; // PATIENT or DOCTOR
 
     // Doctor-only fields (ignored if role = PATIENT)
