@@ -6,6 +6,7 @@ import com.clinicsystem.entity.Appointment;
 import com.clinicsystem.entity.Patient;
 import com.clinicsystem.entity.Schedule;
 import com.clinicsystem.entity.enums.AppointmentStatus;
+import com.clinicsystem.exception.InvalidAppointmentStateException;
 import com.clinicsystem.exception.ResourceNotFoundException;
 import com.clinicsystem.exception.SlotAlreadyBookedException;
 import com.clinicsystem.repository.AppointmentRepository;
@@ -18,12 +19,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
+
+    private static final EnumSet<AppointmentStatus> CANCELLABLE =
+            EnumSet.of(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED);
 
     private final ScheduleRepository scheduleRepository;
     private final AppointmentRepository appointmentRepository;
@@ -67,8 +72,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional
     public void cancel(Long appointmentId, Long requesterId) {
-        Appointment appt = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+        Appointment appt = requireAppointment(appointmentId);
 
         boolean isPatientOwner = appt.getPatient().getId().equals(requesterId);
         boolean isDoctorOwner = appt.getDoctor().getId().equals(requesterId);
@@ -77,12 +81,46 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new AccessDeniedException("You are not part of this appointment");
         }
 
-        appt.setStatus(AppointmentStatus.CANCELLED);
+        requireStatus(appt, CANCELLABLE, "Only PENDING or CONFIRMED appointments can be cancelled");
 
-        Schedule schedule = appt.getSchedule();
-        schedule.setBooked(false); // free the slot back up
-        scheduleRepository.save(schedule);
+        appt.setStatus(AppointmentStatus.CANCELLED);
+        freeSchedule(appt);
         appointmentRepository.save(appt);
+    }
+
+    @Override
+    @Transactional
+    public AppointmentResponse confirm(Long appointmentId, Long doctorId) {
+        Appointment appt = requireOwnedByDoctor(appointmentId, doctorId);
+        requireStatus(appt, EnumSet.of(AppointmentStatus.PENDING),
+                "Only PENDING appointments can be confirmed");
+
+        appt.setStatus(AppointmentStatus.CONFIRMED);
+        return toResponse(appointmentRepository.save(appt));
+    }
+
+    @Override
+    @Transactional
+    public AppointmentResponse reject(Long appointmentId, Long doctorId) {
+        Appointment appt = requireOwnedByDoctor(appointmentId, doctorId);
+        requireStatus(appt, EnumSet.of(AppointmentStatus.PENDING),
+                "Only PENDING appointments can be rejected");
+
+        appt.setStatus(AppointmentStatus.REJECTED);
+        freeSchedule(appt);
+        return toResponse(appointmentRepository.save(appt));
+    }
+
+    @Override
+    @Transactional
+    public AppointmentResponse complete(Long appointmentId, Long doctorId) {
+        Appointment appt = requireOwnedByDoctor(appointmentId, doctorId);
+        requireStatus(appt, EnumSet.of(AppointmentStatus.CONFIRMED),
+                "Only CONFIRMED appointments can be completed");
+
+        appt.setStatus(AppointmentStatus.COMPLETED);
+        // Slot stays booked — the visit happened; free it only on cancel/reject.
+        return toResponse(appointmentRepository.save(appt));
     }
 
     @Override
@@ -95,6 +133,32 @@ public class AppointmentServiceImpl implements AppointmentService {
     public List<AppointmentResponse> getForDoctor(Long doctorId) {
         return appointmentRepository.findByDoctorId(doctorId)
                 .stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    private Appointment requireAppointment(Long appointmentId) {
+        return appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+    }
+
+    private Appointment requireOwnedByDoctor(Long appointmentId, Long doctorId) {
+        Appointment appt = requireAppointment(appointmentId);
+        if (!appt.getDoctor().getId().equals(doctorId)) {
+            throw new AccessDeniedException("You are not the doctor for this appointment");
+        }
+        return appt;
+    }
+
+    private void requireStatus(Appointment appt, EnumSet<AppointmentStatus> allowed, String message) {
+        if (!allowed.contains(appt.getStatus())) {
+            throw new InvalidAppointmentStateException(
+                    message + " (current status: " + appt.getStatus() + ")");
+        }
+    }
+
+    private void freeSchedule(Appointment appt) {
+        Schedule schedule = appt.getSchedule();
+        schedule.setBooked(false);
+        scheduleRepository.save(schedule);
     }
 
     private AppointmentResponse toResponse(Appointment a) {

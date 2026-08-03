@@ -32,17 +32,28 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("Email already registered");
         }
 
+        if (req.getRole() == null || req.getRole() == Role.ADMIN) {
+            throw new IllegalArgumentException("Role must be PATIENT or DOCTOR");
+        }
+
         User user;
         if (req.getRole() == Role.DOCTOR) {
+            if (req.getSpecialty() == null || req.getSpecialty().isBlank()) {
+                throw new IllegalArgumentException("specialty is required for doctors");
+            }
+            if (req.getLocation() == null || req.getLocation().isBlank()) {
+                throw new IllegalArgumentException("location is required for doctors");
+            }
+
             user = Doctor.builder()
                     .name(req.getName()).email(req.getEmail())
                     .phone(req.getPhone())
                     .password(passwordEncoder.encode(req.getPassword()))
                     .role(Role.DOCTOR)
-                    .specialty(req.getSpecialty())
-                    .location(req.getLocation())
+                    .specialty(req.getSpecialty().trim())
+                    .location(req.getLocation().trim())
                     .build();
-        } else {
+        } else if (req.getRole() == Role.PATIENT) {
             user = Patient.builder()
                     .name(req.getName()).email(req.getEmail())
                     .phone(req.getPhone())
@@ -51,6 +62,8 @@ public class AuthServiceImpl implements AuthService {
                     .bloodType(req.getBloodType())
                     .gender(req.getGender())
                     .build();
+        } else {
+            throw new IllegalArgumentException("Role must be PATIENT or DOCTOR");
         }
 
         userRepository.save(user);

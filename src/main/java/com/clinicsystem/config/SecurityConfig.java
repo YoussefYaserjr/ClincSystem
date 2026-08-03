@@ -4,6 +4,7 @@ import com.clinicsystem.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -31,7 +32,6 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        // Pass the userDetailsService directly into the constructor here:
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider(this.userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         return provider;
@@ -48,10 +48,25 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Public auth
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/search/**", "/doctors").permitAll()
-                        .requestMatchers("/doctors/**").hasAnyRole("ADMIN", "DOCTOR")
+
+                        // Public doctor discovery (patients need this before booking)
+                        .requestMatchers(HttpMethod.GET, "/doctors", "/doctors/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/search/**").permitAll()
+
+                        // Public available slots (authenticated booking still required to reserve)
+                        .requestMatchers(HttpMethod.GET, "/schedules/doctor/**").permitAll()
+
+                        // Doctor manages own schedule
+                        .requestMatchers("/schedules/**").hasAnyRole("DOCTOR", "ADMIN")
+
+                        // Appointments: patients book/cancel; doctors confirm/reject/complete
                         .requestMatchers("/appointments/**").hasAnyRole("PATIENT", "DOCTOR", "ADMIN")
+
+                        // Medical records: patient + doctor (ownership enforced in service)
+                        .requestMatchers("/medical-records/**").hasAnyRole("PATIENT", "DOCTOR", "ADMIN")
+
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())

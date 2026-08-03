@@ -43,6 +43,36 @@ public class AppointmentController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Doctor accepts a PENDING appointment. */
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<AppointmentResponse> confirm(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable Long id) {
+
+        Long doctorId = userResolver.resolveAsDoctor(principal).getId();
+        return ResponseEntity.ok(appointmentService.confirm(id, doctorId));
+    }
+
+    /** Doctor rejects a PENDING appointment and frees the schedule slot. */
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<AppointmentResponse> reject(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable Long id) {
+
+        Long doctorId = userResolver.resolveAsDoctor(principal).getId();
+        return ResponseEntity.ok(appointmentService.reject(id, doctorId));
+    }
+
+    /** Doctor marks a CONFIRMED appointment as completed after the visit. */
+    @PostMapping("/{id}/complete")
+    public ResponseEntity<AppointmentResponse> complete(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable Long id) {
+
+        Long doctorId = userResolver.resolveAsDoctor(principal).getId();
+        return ResponseEntity.ok(appointmentService.complete(id, doctorId));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<List<AppointmentResponse>> myAppointments(
             @AuthenticationPrincipal UserDetails principal) {
