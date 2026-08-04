@@ -8,7 +8,7 @@ import lombok.Data;
 @Data
 public class CreateMedicalRecordRequest {
     @NotNull private Long patientId;
-    private Long appointmentId; // optional
+    private Long appointmentId; // required: record must be linked to a visit
 
     @NotBlank private String diagnosis;
     private String prescription;

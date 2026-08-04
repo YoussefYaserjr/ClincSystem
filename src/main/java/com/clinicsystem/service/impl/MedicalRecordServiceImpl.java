@@ -48,6 +48,8 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
                     || !appointment.getPatient().getId().equals(patient.getId())) {
                 throw new AccessDeniedException("Appointment does not belong to this doctor/patient pair");
             }
+        } else {
+            throw new IllegalArgumentException("appointmentId is required to create a medical record");
         }
 
         MedicalRecord record = MedicalRecord.builder()
