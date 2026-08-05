@@ -4,6 +4,8 @@ import com.clinicsystem.dto.request.CreateMedicalRecordRequest;
 import com.clinicsystem.dto.response.MedicalRecordResponse;
 import com.clinicsystem.security.AuthenticatedUserResolver;
 import com.clinicsystem.service.MedicalRecordService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +18,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/medical-records")
 @RequiredArgsConstructor
+@Tag(name = "Medical Records", description = "Manage patient medical records")
 public class MedicalRecordController {
 
     private final MedicalRecordService medicalRecordService;
     private final AuthenticatedUserResolver userResolver;
 
     @PostMapping
+    @Operation(summary = "Create medical record", description = "Doctor creates a medical record for a patient.")
     public ResponseEntity<MedicalRecordResponse> create(
             @AuthenticationPrincipal UserDetails principal,
             @Valid @RequestBody CreateMedicalRecordRequest request) {
@@ -31,6 +35,7 @@ public class MedicalRecordController {
     }
 
     @GetMapping("/patient/{patientId}")
+    @Operation(summary = "Get patient records", description = "Patient or authorized doctor reads a patient's records.")
     public ResponseEntity<List<MedicalRecordResponse>> getForPatient(
             @AuthenticationPrincipal UserDetails principal,
             @PathVariable Long patientId) {
@@ -40,6 +45,7 @@ public class MedicalRecordController {
     }
 
     @GetMapping("/mine")
+    @Operation(summary = "My authored records", description = "Doctor lists medical records they created.")
     public ResponseEntity<List<MedicalRecordResponse>> mine(
             @AuthenticationPrincipal UserDetails principal) {
 
@@ -48,6 +54,7 @@ public class MedicalRecordController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete medical record", description = "Authoring doctor deletes a medical record.")
     public ResponseEntity<Void> delete(
             @AuthenticationPrincipal UserDetails principal,
             @PathVariable Long id) {

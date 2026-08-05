@@ -7,6 +7,8 @@ import com.clinicsystem.entity.Patient;
 import com.clinicsystem.entity.User;
 import com.clinicsystem.security.AuthenticatedUserResolver;
 import com.clinicsystem.service.AppointmentService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,12 +21,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/appointments")
 @RequiredArgsConstructor
+@Tag(name = "Appointments", description = "Book, cancel and manage appointment lifecycle")
 public class AppointmentController {
 
     private final AppointmentService appointmentService;
     private final AuthenticatedUserResolver userResolver;
 
     @PostMapping
+    @Operation(summary = "Book an appointment", description = "Patient books an available slot for a doctor.")
     public ResponseEntity<AppointmentResponse> book(
             @AuthenticationPrincipal UserDetails principal,
             @Valid @RequestBody BookAppointmentRequest request) {
@@ -34,6 +38,7 @@ public class AppointmentController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Cancel an appointment", description = "Patient or doctor cancels an appointment and frees the slot.")
     public ResponseEntity<Void> cancel(
             @AuthenticationPrincipal UserDetails principal,
             @PathVariable Long id) {
@@ -45,6 +50,7 @@ public class AppointmentController {
 
     /** Doctor accepts a PENDING appointment. */
     @PostMapping("/{id}/confirm")
+    @Operation(summary = "Confirm an appointment", description = "Doctor accepts a PENDING appointment.")
     public ResponseEntity<AppointmentResponse> confirm(
             @AuthenticationPrincipal UserDetails principal,
             @PathVariable Long id) {
@@ -55,6 +61,7 @@ public class AppointmentController {
 
     /** Doctor rejects a PENDING appointment and frees the schedule slot. */
     @PostMapping("/{id}/reject")
+    @Operation(summary = "Reject an appointment", description = "Doctor rejects a PENDING appointment and frees the slot.")
     public ResponseEntity<AppointmentResponse> reject(
             @AuthenticationPrincipal UserDetails principal,
             @PathVariable Long id) {
@@ -65,6 +72,7 @@ public class AppointmentController {
 
     /** Doctor marks a CONFIRMED appointment as completed after the visit. */
     @PostMapping("/{id}/complete")
+    @Operation(summary = "Complete an appointment", description = "Doctor marks a CONFIRMED appointment as completed after the visit.")
     public ResponseEntity<AppointmentResponse> complete(
             @AuthenticationPrincipal UserDetails principal,
             @PathVariable Long id) {
@@ -74,6 +82,7 @@ public class AppointmentController {
     }
 
     @GetMapping("/me")
+    @Operation(summary = "My appointments", description = "Returns the authenticated patient's or doctor's appointments.")
     public ResponseEntity<List<AppointmentResponse>> myAppointments(
             @AuthenticationPrincipal UserDetails principal) {
 
