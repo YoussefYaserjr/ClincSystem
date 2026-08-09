@@ -30,4 +30,9 @@ public class Doctor extends User {
     @Column(nullable = false)
     @Builder.Default
     private Double rating = 0.0;
+
+    /** Admin approval gate. Only approved doctors appear in public discovery. */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean approved = false;
 }

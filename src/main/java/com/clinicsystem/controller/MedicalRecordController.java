@@ -2,6 +2,7 @@ package com.clinicsystem.controller;
 
 import com.clinicsystem.dto.request.CreateMedicalRecordRequest;
 import com.clinicsystem.dto.response.MedicalRecordResponse;
+import com.clinicsystem.dto.response.PageResponse;
 import com.clinicsystem.security.AuthenticatedUserResolver;
 import com.clinicsystem.service.MedicalRecordService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,8 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/medical-records")
@@ -36,21 +35,25 @@ public class MedicalRecordController {
 
     @GetMapping("/patient/{patientId}")
     @Operation(summary = "Get patient records", description = "Patient or authorized doctor reads a patient's records.")
-    public ResponseEntity<List<MedicalRecordResponse>> getForPatient(
+    public ResponseEntity<PageResponse<MedicalRecordResponse>> getForPatient(
             @AuthenticationPrincipal UserDetails principal,
-            @PathVariable Long patientId) {
+            @PathVariable Long patientId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
         Long requesterId = userResolver.resolveId(principal);
-        return ResponseEntity.ok(medicalRecordService.getForPatient(requesterId, patientId));
+        return ResponseEntity.ok(medicalRecordService.getForPatient(requesterId, patientId, page, size));
     }
 
     @GetMapping("/mine")
     @Operation(summary = "My authored records", description = "Doctor lists medical records they created.")
-    public ResponseEntity<List<MedicalRecordResponse>> mine(
-            @AuthenticationPrincipal UserDetails principal) {
+    public ResponseEntity<PageResponse<MedicalRecordResponse>> mine(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
         Long doctorId = userResolver.resolveAsDoctor(principal).getId();
-        return ResponseEntity.ok(medicalRecordService.getMineAsDoctor(doctorId));
+        return ResponseEntity.ok(medicalRecordService.getMineAsDoctor(doctorId, page, size));
     }
 
     @DeleteMapping("/{id}")

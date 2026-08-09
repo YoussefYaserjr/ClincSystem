@@ -18,4 +18,7 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Schedule s where s.id = :id")
     Optional<Schedule> findByIdForUpdate(@Param("id") Long id);
+
+    long countByBookedFalse();
+    boolean existsByDoctorId(Long doctorId);
 }

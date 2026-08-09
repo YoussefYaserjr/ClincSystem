@@ -146,11 +146,11 @@ class AppointmentControllerTest extends AbstractIntegrationTest {
 
         mockMvc.perform(bearer(get("/appointments/me"), f.patient().getToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + appointmentId + ")]").exists());
+                .andExpect(jsonPath("$.content[?(@.id == " + appointmentId + ")]").exists());
 
         mockMvc.perform(bearer(get("/appointments/me"), f.doctor().getToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + appointmentId + ")]").exists());
+                .andExpect(jsonPath("$.content[?(@.id == " + appointmentId + ")]").exists());
     }
 
     @Test

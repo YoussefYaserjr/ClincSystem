@@ -1,0 +1,40 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: clinic-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123123}
+      MYSQL_DATABASE: clinic
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-123123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: youssefyaser/clinicsystem:latest
+    container_name: clinic-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # DB_PASSWORD / JWT_SECRET / ADMIN_PASSWORD come from your .env file
+      DB_URL: jdbc:mysql://db:3306/clinic?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-123123}
+      JWT_SECRET: ${JWT_SECRET:-replace_this_with_a_long_random_base64_string_at_least_256_bits_for_hs256}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@clinic.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql-data:

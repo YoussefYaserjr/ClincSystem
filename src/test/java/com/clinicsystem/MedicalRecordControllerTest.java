@@ -84,7 +84,7 @@ class MedicalRecordControllerTest extends AbstractIntegrationTest {
         mockMvc.perform(bearer(get("/medical-records/patient/{id}", v.patient().getUserId()),
                         v.patient().getToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
     }
 
     @Test

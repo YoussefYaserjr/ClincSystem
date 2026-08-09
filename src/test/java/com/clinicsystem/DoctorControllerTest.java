@@ -16,9 +16,9 @@ class DoctorControllerTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/doctors"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + doctor.getUserId() + ")]")
+                .andExpect(jsonPath("$.content[?(@.id == " + doctor.getUserId() + ")]")
                         .exists())
-                .andExpect(jsonPath("$[?(@.id == " + doctor.getUserId() + ")].specialty")
+                .andExpect(jsonPath("$.content[?(@.id == " + doctor.getUserId() + ")].specialty")
                         .value("Cardiology"));
     }
 
@@ -45,7 +45,7 @@ class DoctorControllerTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/search/doctors")
                         .param("specialty", "pediatrics"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + doctor.getUserId() + ")]")
+                .andExpect(jsonPath("$.content[?(@.id == " + doctor.getUserId() + ")]")
                         .exists());
     }
 
@@ -57,7 +57,7 @@ class DoctorControllerTest extends AbstractIntegrationTest {
                         .param("specialty", "Neurology")
                         .param("location", "Cairo"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + doctor.getUserId() + ")]")
+                .andExpect(jsonPath("$.content[?(@.id == " + doctor.getUserId() + ")]")
                         .exists());
     }
 
@@ -66,6 +66,6 @@ class DoctorControllerTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/search/doctors")
                         .param("specialty", "NonExistentSpecialty"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.content").isEmpty());
     }
 }

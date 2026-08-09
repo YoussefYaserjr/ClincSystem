@@ -1,15 +1,16 @@
 package com.clinicsystem.service.impl;
 
 import com.clinicsystem.dto.response.DoctorResponse;
+import com.clinicsystem.dto.response.PageResponse;
 import com.clinicsystem.entity.Doctor;
 import com.clinicsystem.exception.ResourceNotFoundException;
 import com.clinicsystem.repository.DoctorRepository;
 import com.clinicsystem.service.DoctorService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -18,38 +19,41 @@ public class DoctorServiceImpl implements DoctorService {
     private final DoctorRepository doctorRepository;
 
     @Override
-    public List<DoctorResponse> getAll() {
-        return doctorRepository.findAll().stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    public PageResponse<DoctorResponse> getAll(int page, int size) {
+        Page<Doctor> doctors = doctorRepository.findByApprovedTrue(pageRequest(page, size));
+        return PageResponse.of(doctors, this::toResponse);
     }
 
     @Override
     public DoctorResponse getById(Long id) {
-        Doctor doctor = doctorRepository.findById(id)
+        Doctor doctor = doctorRepository.findByIdAndApprovedTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor not found: " + id));
         return toResponse(doctor);
     }
 
     @Override
-    public List<DoctorResponse> searchBySpecialty(String specialty) {
-        return doctorRepository.findBySpecialtyIgnoreCase(specialty).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    public PageResponse<DoctorResponse> searchBySpecialty(String specialty, int page, int size) {
+        Page<Doctor> doctors = doctorRepository
+                .findByApprovedTrueAndSpecialtyIgnoreCase(specialty, pageRequest(page, size));
+        return PageResponse.of(doctors, this::toResponse);
     }
 
     @Override
-    public List<DoctorResponse> searchByLocation(String location) {
-        return doctorRepository.findByLocationIgnoreCase(location).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    public PageResponse<DoctorResponse> searchByLocation(String location, int page, int size) {
+        Page<Doctor> doctors = doctorRepository
+                .findByApprovedTrueAndLocationIgnoreCase(location, pageRequest(page, size));
+        return PageResponse.of(doctors, this::toResponse);
     }
 
     @Override
-    public List<DoctorResponse> searchBySpecialtyAndLocation(String specialty, String location) {
-        return doctorRepository.findBySpecialtyIgnoreCaseAndLocationIgnoreCase(specialty, location).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    public PageResponse<DoctorResponse> searchBySpecialtyAndLocation(String specialty, String location, int page, int size) {
+        Page<Doctor> doctors = doctorRepository
+                .findByApprovedTrueAndSpecialtyIgnoreCaseAndLocationIgnoreCase(specialty, location, pageRequest(page, size));
+        return PageResponse.of(doctors, this::toResponse);
+    }
+
+    private PageRequest pageRequest(int page, int size) {
+        return PageRequest.of(page, size, Sort.by("name"));
     }
 
     private DoctorResponse toResponse(Doctor d) {
@@ -64,6 +68,7 @@ public class DoctorServiceImpl implements DoctorService {
                 .experience(d.getExperience())
                 .consultationFee(d.getConsultationFee())
                 .rating(d.getRating())
+                .approved(d.isApproved())
                 .build();
     }
 }

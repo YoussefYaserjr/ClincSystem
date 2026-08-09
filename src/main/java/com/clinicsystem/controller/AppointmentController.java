@@ -2,9 +2,11 @@ package com.clinicsystem.controller;
 
 import com.clinicsystem.dto.request.BookAppointmentRequest;
 import com.clinicsystem.dto.response.AppointmentResponse;
+import com.clinicsystem.dto.response.PageResponse;
 import com.clinicsystem.entity.Doctor;
 import com.clinicsystem.entity.Patient;
 import com.clinicsystem.entity.User;
+import com.clinicsystem.entity.enums.AppointmentStatus;
 import com.clinicsystem.security.AuthenticatedUserResolver;
 import com.clinicsystem.service.AppointmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,15 +84,18 @@ public class AppointmentController {
     }
 
     @GetMapping("/me")
-    @Operation(summary = "My appointments", description = "Returns the authenticated patient's or doctor's appointments.")
-    public ResponseEntity<List<AppointmentResponse>> myAppointments(
-            @AuthenticationPrincipal UserDetails principal) {
+    @Operation(summary = "My appointments", description = "Returns the authenticated patient's or doctor's appointments, optionally filtered by status.")
+    public ResponseEntity<PageResponse<AppointmentResponse>> myAppointments(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(required = false) AppointmentStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
         User user = userResolver.resolve(principal);
-        List<AppointmentResponse> result = switch (user) {
-            case Patient p -> appointmentService.getForPatient(p.getId());
-            case Doctor d -> appointmentService.getForDoctor(d.getId());
-            default -> List.of();
+        PageResponse<AppointmentResponse> result = switch (user) {
+            case Patient p -> appointmentService.getForPatient(p.getId(), status, page, size);
+            case Doctor d -> appointmentService.getForDoctor(d.getId(), status, page, size);
+            default -> new PageResponse<>(List.of(), page, size, 0, 0, true);
         };
         return ResponseEntity.ok(result);
     }

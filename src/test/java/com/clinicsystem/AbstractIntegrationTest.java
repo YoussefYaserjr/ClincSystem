@@ -43,6 +43,8 @@ public abstract class AbstractIntegrationTest {
 
     private static final AtomicInteger SEQ = new AtomicInteger();
     private static final String PASSWORD = "password123";
+    private static final String ADMIN_EMAIL = "admin@clinic.com";
+    private static final String ADMIN_PASSWORD = "Admin@12345";
 
     @Autowired
     protected MockMvc mockMvc;
@@ -50,9 +52,13 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     protected ObjectMapper objectMapper;
 
+    private String adminToken;
+
     protected AuthResponse registerDoctor(String specialty) throws Exception {
-        return register("doctor-" + SEQ.incrementAndGet() + "@test.com",
+        AuthResponse doctor = register("doctor-" + SEQ.incrementAndGet() + "@test.com",
                 "DOCTOR", specialty, "Cairo");
+        approveDoctor(doctor.getUserId());
+        return doctor;
     }
 
     protected AuthResponse registerPatient() throws Exception {
@@ -91,6 +97,26 @@ public abstract class AbstractIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "email", email, "password", password))))
                 .andExpect(status().is(expectedStatus));
+    }
+
+    /** Logs in as the bootstrapped admin (cached for the test class). */
+    protected synchronized String adminToken() throws Exception {
+        if (adminToken == null) {
+            MvcResult result = mockMvc.perform(post("/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of(
+                                    "email", ADMIN_EMAIL, "password", ADMIN_PASSWORD))))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            adminToken = objectMapper.readTree(result.getResponse().getContentAsString())
+                    .get("token").asText();
+        }
+        return adminToken;
+    }
+
+    protected void approveDoctor(Long doctorId) throws Exception {
+        mockMvc.perform(bearer(post("/admin/doctors/{id}/approve", doctorId), adminToken()))
+                .andExpect(status().isOk());
     }
 
     protected Long createSlot(String doctorToken, LocalDate date,

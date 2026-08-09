@@ -2,6 +2,7 @@ package com.clinicsystem.service.impl;
 
 import com.clinicsystem.dto.request.CreateMedicalRecordRequest;
 import com.clinicsystem.dto.response.MedicalRecordResponse;
+import com.clinicsystem.dto.response.PageResponse;
 import com.clinicsystem.entity.Appointment;
 import com.clinicsystem.entity.Doctor;
 import com.clinicsystem.entity.MedicalRecord;
@@ -13,16 +14,18 @@ import com.clinicsystem.repository.MedicalRecordRepository;
 import com.clinicsystem.repository.PatientRepository;
 import com.clinicsystem.service.MedicalRecordService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 @Service
 @RequiredArgsConstructor
 public class MedicalRecordServiceImpl implements MedicalRecordService {
+
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt");
 
     private final MedicalRecordRepository medicalRecordRepository;
     private final DoctorRepository doctorRepository;
@@ -66,25 +69,22 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
     }
 
     @Override
-    public List<MedicalRecordResponse> getForPatient(Long requesterId, Long patientId) {
+    public PageResponse<MedicalRecordResponse> getForPatient(Long requesterId, Long patientId, int page, int size) {
         // A patient may only view their own records.
-        // (Doctors viewing a specific patient's history would need a separate,
-        // appointment-relationship-gated endpoint — not implemented here to
-        // avoid quietly allowing any doctor to browse any patient's chart.)
         if (!requesterId.equals(patientId)) {
             throw new AccessDeniedException("You may only view your own medical records");
         }
 
-        return medicalRecordRepository.findByPatientId(patientId).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+        Page<MedicalRecord> records = medicalRecordRepository
+                .findByPatientId(patientId, pageRequest(page, size));
+        return PageResponse.of(records, this::toResponse);
     }
 
     @Override
-    public List<MedicalRecordResponse> getMineAsDoctor(Long doctorId) {
-        return medicalRecordRepository.findByDoctorId(doctorId).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    public PageResponse<MedicalRecordResponse> getMineAsDoctor(Long doctorId, int page, int size) {
+        Page<MedicalRecord> records = medicalRecordRepository
+                .findByDoctorId(doctorId, pageRequest(page, size));
+        return PageResponse.of(records, this::toResponse);
     }
 
     @Override
@@ -94,6 +94,10 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Medical record not found or not owned by this doctor"));
         medicalRecordRepository.delete(record);
+    }
+
+    private PageRequest pageRequest(int page, int size) {
+        return PageRequest.of(page, size, NEWEST_FIRST);
     }
 
     private MedicalRecordResponse toResponse(MedicalRecord r) {

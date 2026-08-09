@@ -2,6 +2,7 @@ package com.clinicsystem.service.impl;
 
 import com.clinicsystem.dto.request.BookAppointmentRequest;
 import com.clinicsystem.dto.response.AppointmentResponse;
+import com.clinicsystem.dto.response.PageResponse;
 import com.clinicsystem.entity.Appointment;
 import com.clinicsystem.entity.Patient;
 import com.clinicsystem.entity.Schedule;
@@ -13,15 +14,17 @@ import com.clinicsystem.repository.AppointmentRepository;
 import com.clinicsystem.repository.PatientRepository;
 import com.clinicsystem.repository.ScheduleRepository;
 import com.clinicsystem.service.AppointmentService;
+import com.clinicsystem.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,9 +33,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final EnumSet<AppointmentStatus> CANCELLABLE =
             EnumSet.of(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED);
 
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt");
+
     private final ScheduleRepository scheduleRepository;
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -66,6 +72,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         // if two requests somehow raced past the lock above.
         appointment = appointmentRepository.save(appointment);
 
+        notificationService.appointmentBooked(appointment);
+
         return toResponse(appointment);
     }
 
@@ -86,6 +94,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         appt.setStatus(AppointmentStatus.CANCELLED);
         freeSchedule(appt);
         appointmentRepository.save(appt);
+
+        notificationService.appointmentCancelled(appt, isPatientOwner);
     }
 
     @Override
@@ -96,7 +106,9 @@ public class AppointmentServiceImpl implements AppointmentService {
                 "Only PENDING appointments can be confirmed");
 
         appt.setStatus(AppointmentStatus.CONFIRMED);
-        return toResponse(appointmentRepository.save(appt));
+        AppointmentResponse response = toResponse(appointmentRepository.save(appt));
+        notificationService.appointmentConfirmed(appt);
+        return response;
     }
 
     @Override
@@ -108,7 +120,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         appt.setStatus(AppointmentStatus.REJECTED);
         freeSchedule(appt);
-        return toResponse(appointmentRepository.save(appt));
+        AppointmentResponse response = toResponse(appointmentRepository.save(appt));
+        notificationService.appointmentRejected(appt);
+        return response;
     }
 
     @Override
@@ -120,19 +134,29 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         appt.setStatus(AppointmentStatus.COMPLETED);
         // Slot stays booked — the visit happened; free it only on cancel/reject.
-        return toResponse(appointmentRepository.save(appt));
+        AppointmentResponse response = toResponse(appointmentRepository.save(appt));
+        notificationService.appointmentCompleted(appt);
+        return response;
     }
 
     @Override
-    public List<AppointmentResponse> getForPatient(Long patientId) {
-        return appointmentRepository.findByPatientId(patientId)
-                .stream().map(this::toResponse).collect(Collectors.toList());
+    public PageResponse<AppointmentResponse> getForPatient(Long patientId, AppointmentStatus status, int page, int size) {
+        Page<Appointment> appts = (status == null)
+                ? appointmentRepository.findByPatientId(patientId, pageRequest(page, size))
+                : appointmentRepository.findByPatientIdAndStatus(patientId, status, pageRequest(page, size));
+        return PageResponse.of(appts, this::toResponse);
     }
 
     @Override
-    public List<AppointmentResponse> getForDoctor(Long doctorId) {
-        return appointmentRepository.findByDoctorId(doctorId)
-                .stream().map(this::toResponse).collect(Collectors.toList());
+    public PageResponse<AppointmentResponse> getForDoctor(Long doctorId, AppointmentStatus status, int page, int size) {
+        Page<Appointment> appts = (status == null)
+                ? appointmentRepository.findByDoctorId(doctorId, pageRequest(page, size))
+                : appointmentRepository.findByDoctorIdAndStatus(doctorId, status, pageRequest(page, size));
+        return PageResponse.of(appts, this::toResponse);
+    }
+
+    private PageRequest pageRequest(int page, int size) {
+        return PageRequest.of(page, size, NEWEST_FIRST);
     }
 
     private Appointment requireAppointment(Long appointmentId) {

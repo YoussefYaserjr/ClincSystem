@@ -17,4 +17,5 @@ public class DoctorResponse {
     private Integer experience;
     private BigDecimal consultationFee;
     private Double rating;
+    private boolean approved;
 }
