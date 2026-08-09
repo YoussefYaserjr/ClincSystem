@@ -15,7 +15,7 @@ Containerized with Docker and published to Docker Hub as [`youssefyaser/clinicsy
 - **Medical records** — doctors attach records to patient visits; patients and doctors can read them with strict ownership checks.
 - **Admin dashboard data** — user/doctor/appointment/schedule/medical-record statistics.
 - **Pagination** — every list endpoint returns a consistent `PageResponse<T>` shape.
-- **Rate limiting** — in-memory, IP-based, applied to `/auth/**` and appointment booking (disabled by default).
+- **Rate limiting** — IP-based fixed-window limits on `/auth/**` and appointment booking. Single-instance (in-memory) by default, or **distributed via Redis** so the budget is shared across every replica behind a load balancer (disabled by default).
 - **Email notifications** — hooks on appointment events; logs instead of sending when disabled (default), or send real email via `spring.mail.*`.
 - **Swagger UI** — interactive API documentation at `/swagger-ui.html`.
 - **Test suite** — pure-Mockito service unit tests plus Testcontainers-backed integration tests against a real MySQL 8.4.
@@ -88,7 +88,7 @@ cp .env.example .env    # adjust secrets (DB_PASSWORD, JWT_SECRET, ADMIN_PASSWOR
 docker compose up -d
 ```
 
-This starts `clinic-mysql` (MySQL 8.4) and `clinic-app` (built image or `youssefyaser/clinicsystem:latest`) with a healthcheck-gated startup order.
+This starts `clinic-mysql` (MySQL 8.4), `clinic-redis` (Redis 7) and `clinic-app` (built image or `youssefyaser/clinicsystem:latest`) with a healthcheck-gated startup order.
 
 ### 3. Build & run the Docker image yourself
 
@@ -116,10 +116,43 @@ All settings can be overridden with environment variables.
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | `admin@clinic.com` / `Admin@12345` / `Clinic Admin` | First admin account, created on startup only if no admin exists |
 | `NOTIFICATIONS_ENABLED`      | `false`                                                                 | When `true` + `spring.mail.*` set, sends real emails |
 | `RATE_LIMIT_ENABLED`         | `false`                                                                 | When `true`, enforces the limits below   |
+| `RATE_LIMIT_STORE`           | `memory`                                                                | Rate-limit backend: `memory` (single instance) or `redis` (distributed across replicas) |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / *(empty)*                    | Redis connection (used when `RATE_LIMIT_STORE=redis`) |
 | `RATE_LIMIT_AUTH_MAX` / `RATE_LIMIT_AUTH_WINDOW` | `20` / `60`                                            | Max `/auth/**` requests per window (seconds) |
 | `RATE_LIMIT_BOOKING_MAX` / `RATE_LIMIT_BOOKING_WINDOW` | `10` / `60`                                        | Max `POST /appointments` per window      |
 
 > **Important:** never use the default `JWT_SECRET` or admin credentials in production. Admin accounts cannot be self-registered — they are only created via `ADMIN_EMAIL`/`ADMIN_PASSWORD` at startup.
+
+## Distributed rate limiting (how we solved the multi-instance problem)
+
+**The problem.** The original limiter used a `ConcurrentHashMap` inside each running app (`InMemoryRateLimiter`). That is fine while there is exactly one instance, but as soon as you scale out behind a load balancer each replica keeps its **own** counter, so the limit is effectively multiplied by the number of replicas — and a bursty client can simply be routed to a different instance to dodge the limit.
+
+**The solution.** Move the counter out of the app process and into Redis, so every replica reads and writes the **same** counter. Scaling from one to N replicas does not change the effective budget at all.
+
+Three pieces were added:
+
+1. **`RateLimiter` interface** (`security/RateLimiter.java`) — `tryAcquire(key, maxRequests, windowSeconds)` abstracts the backend.
+2. **`InMemoryRateLimiter`** — the old logic, kept as the default (`app.rate-limit.store=memory`), so existing single-instance deployments and tests are unchanged.
+3. **`RedisRateLimiter`** — a fixed-window counter implemented as an atomic Lua script:
+
+   ```lua
+   local current = redis.call('INCR', KEYS[1])
+   if current == 1 then
+       redis.call('EXPIRE', KEYS[1], ARGV[2])
+   end
+   return current > tonumber(ARGV[1]) and 0 or 1
+   ```
+
+   `INCR` + `EXPIRE` run as one Redis script, so the increment and the window expiry are atomic — no two requests can read the same counter value. The key is `rate-limit:<clientIp>|<rule>`, where `clientIp` honors `X-Forwarded-For` (first IP) so requests behind a reverse proxy are keyed by the real client.
+
+`RateLimiterConfig` picks the backend from `app.rate-limit.store`: `redis` requires a `StringRedisTemplate` (via `spring-boot-starter-data-redis`, mapped from `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`). If Redis is unreachable the limiter **fails open** — the request is allowed and a throttled WARN is logged — so the app stays available rather than rejecting everyone during a Redis outage.
+
+Two bugs found and fixed while building this:
+
+- `RateLimitFilter` was registered as a `@Bean` **and** added to the security chain, so it ran **twice per request** (a limit of 20 hit at 10). Fix: construct it inline in `SecurityConfig.filterChain()` so Spring Boot does not auto-register it as a servlet filter.
+- The Lua arguments must be passed as individual varargs, not `List.of(...)` (a `List` arg caused a `ClassCastException` that the fail-open path swallowed). Fix: `String.valueOf(maxRequests), String.valueOf(windowSeconds)`.
+
+Verified end-to-end: two app containers sharing one Redis, budget of 20 — instance A used 12, instance B got the remaining 8 then `429` for the rest, and the Redis counter showed exactly one increment per request across both instances. With the old in-memory limiter, B would have allowed all 15.
 
 ## Authentication
 
@@ -224,6 +257,7 @@ mvn test
 
 - `src/test/java/com/clinicsystem/` — controller integration tests (MockMvc + Testcontainers).
 - `src/test/java/com/clinicsystem/service/` — pure Mockito unit tests.
+- `src/test/java/com/clinicsystem/security/` — rate limiter unit tests (`InMemoryRateLimiterTest`, `RedisRateLimiterTest`).
 - `src/test/resources/application.properties` shadows the main one on the test classpath; keep the `app.*`, `jwt.*` keys in sync when adding config.
 
 ## Contributing

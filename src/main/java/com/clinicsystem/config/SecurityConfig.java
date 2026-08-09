@@ -1,6 +1,7 @@
 package com.clinicsystem.config;
 
 import com.clinicsystem.security.JwtAuthFilter;
+import com.clinicsystem.security.RateLimiter;
 import com.clinicsystem.security.RateLimitFilter;
 import com.clinicsystem.security.RateLimitProperties;
 import lombok.RequiredArgsConstructor;
@@ -31,11 +32,7 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final ObjectMapper objectMapper;
     private final RateLimitProperties rateLimitProperties;
-
-    @Bean
-    public RateLimitFilter rateLimitFilter() {
-        return new RateLimitFilter(rateLimitProperties, objectMapper);
-    }
+    private final RateLimiter rateLimiter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -55,7 +52,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, RateLimitFilter rateLimitFilter) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // Constructed inline (not a @Bean) so Spring Boot does not also register
+        // it as a servlet filter — otherwise it would run twice per request.
+        RateLimitFilter rateLimitFilter = new RateLimitFilter(rateLimitProperties, objectMapper, rateLimiter);
+
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

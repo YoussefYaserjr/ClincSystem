@@ -14,29 +14,24 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Simple in-memory fixed-window rate limiter applied to authentication and
- * appointment-booking endpoints. Disabled by default (see app.rate-limit.*).
+ * Enforces a fixed-window limit on authentication and appointment-booking
+ * endpoints. The actual counting is delegated to a {@link RateLimiter}, so the
+ * same filter works for a single instance (in-memory) or a replicated
+ * deployment behind a load balancer (Redis). Disabled by default
+ * (see {@code app.rate-limit.*}).
  */
 @RequiredArgsConstructor
 public class RateLimitFilter implements Filter {
 
     private static final int TOO_MANY_REQUESTS = 429;
 
-    private static final class Bucket {
-        long windowStartMillis;
-        int count;
-    }
-
-    private record Rule(String name, int max, long windowMillis) {}
+    private record Rule(String name, int max, long windowSeconds) {}
 
     private final RateLimitProperties properties;
     private final ObjectMapper objectMapper;
-
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final RateLimiter rateLimiter;
 
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain chain)
@@ -57,30 +52,16 @@ public class RateLimitFilter implements Filter {
         }
 
         String key = clientIp(request) + "|" + rule.name();
-        long now = System.currentTimeMillis();
 
-        Bucket bucket = buckets.compute(key, (k, existing) -> {
-            if (existing == null || now - existing.windowStartMillis > rule.windowMillis()) {
-                Bucket fresh = new Bucket();
-                fresh.windowStartMillis = now;
-                fresh.count = 0;
-                return fresh;
-            }
-            return existing;
-        });
-
-        synchronized (bucket) {
-            if (bucket.count >= rule.max()) {
-                response.setStatus(TOO_MANY_REQUESTS);
-                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                objectMapper.writeValue(response.getWriter(), ApiError.builder()
-                        .status(TOO_MANY_REQUESTS)
-                        .message("Too many requests, please slow down")
-                        .timestamp(LocalDateTime.now())
-                        .build());
-                return;
-            }
-            bucket.count++;
+        if (!rateLimiter.tryAcquire(key, rule.max(), rule.windowSeconds())) {
+            response.setStatus(TOO_MANY_REQUESTS);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            objectMapper.writeValue(response.getWriter(), ApiError.builder()
+                    .status(TOO_MANY_REQUESTS)
+                    .message("Too many requests, please slow down")
+                    .timestamp(LocalDateTime.now())
+                    .build());
+            return;
         }
 
         chain.doFilter(request, response);
@@ -88,10 +69,10 @@ public class RateLimitFilter implements Filter {
 
     private Rule match(String method, String path) {
         if (path.startsWith("/auth/")) {
-            return new Rule("auth", properties.getAuthMax(), properties.getAuthWindowSeconds() * 1000);
+            return new Rule("auth", properties.getAuthMax(), properties.getAuthWindowSeconds());
         }
         if ("POST".equals(method) && "/appointments".equals(path)) {
-            return new Rule("booking", properties.getBookingMax(), properties.getBookingWindowSeconds() * 1000);
+            return new Rule("booking", properties.getBookingMax(), properties.getBookingWindowSeconds());
         }
         return null;
     }

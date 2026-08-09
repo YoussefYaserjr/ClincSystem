@@ -24,6 +24,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       # DB_PASSWORD / JWT_SECRET / ADMIN_PASSWORD come from your .env file
       DB_URL: jdbc:mysql://db:3306/clinic?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
@@ -33,8 +35,23 @@ services:
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@clinic.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
+      # Distributed rate limiting (RATE_LIMIT_STORE=redis) across replicas
+      RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-memory}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "8080:8080"
 
+  redis:
+    image: redis:7-alpine
+    container_name: clinic-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
 volumes:
   mysql-data:
+  redis-data:
