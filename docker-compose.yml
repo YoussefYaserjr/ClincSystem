@@ -7,7 +7,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123123}
       MYSQL_DATABASE: clinic
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -42,13 +42,26 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
-      - "8080:8080"
+      - "8081:8080"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 60s
+
+  frontend:
+    build: ./frontend
+    image: youssefyaser/clinicsystem-frontend:latest
+    container_name: clinic-frontend
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      # Name of the backend service inside the compose network (see frontend/nginx)
+      BACKEND_HOST: app:8080
+    ports:
+      - "8080:80"
 
   redis:
     image: redis:7-alpine

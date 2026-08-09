@@ -1,8 +1,8 @@
 # ClinicSystem
 
-A RESTful clinic management system built with **Spring Boot 4.1**, **Java 21**, **Spring Security (JWT)** and **MySQL**. Patients book appointments with doctors, doctors manage their schedules and medical records, and an administrator approves doctors and oversees the system.
+A full-stack clinic management system: a **Spring Boot 4.1 / Java 21** REST backend (Spring Security JWT, MySQL) plus a separate **React + TypeScript** frontend. Patients book appointments with doctors, doctors manage their schedules and medical records, and an administrator approves doctors and oversees the system.
 
-Containerized with Docker and published to Docker Hub as [`youssefyaser/clinicsystem`](https://hub.docker.com/r/youssefyaser/clinicsystem).
+Both sides are containerized independently and published to Docker Hub as [`youssefyaser/clinicsystem`](https://hub.docker.com/r/youssefyaser/clinicsystem) (backend) and [`youssefyaser/clinicsystem-frontend`](https://hub.docker.com/r/youssefyaser/clinicsystem-frontend) (frontend).
 
 ## Features
 
@@ -19,47 +19,61 @@ Containerized with Docker and published to Docker Hub as [`youssefyaser/clinicsy
 - **Email notifications** — hooks on appointment events; logs instead of sending when disabled (default), or send real email via `spring.mail.*`.
 - **Swagger UI** — interactive API documentation at `/swagger-ui.html`.
 - **Health & metrics** — Spring Boot Actuator at `/actuator/health` (with Kubernetes `liveness`/`readiness` probes), `/actuator/metrics` and `/actuator/prometheus` for orchestrators to ping.
+- **Web frontend** — separate React + TypeScript SPA (login/register, patient booking flow, doctor practice manager, admin dashboard) served by nginx with `/api` reverse proxy.
 - **Test suite** — pure-Mockito service unit tests plus Testcontainers-backed integration tests against a real MySQL 8.4.
 
 ## Tech Stack
 
 | Layer      | Technology                                                              |
 |------------|-------------------------------------------------------------------------|
-| Runtime    | Java 21, Spring Boot 4.1.0                                              |
-| Web/Security | Spring WebMVC, Spring Security, JWT (JJWT 0.12.6), BCrypt               |
+| Backend    | Java 21, Spring Boot 4.1.0, Spring WebMVC, Spring Security (JWT, BCrypt) |
 | Persistence| Spring Data JPA, Hibernate, MySQL 8.x (`mysql-connector-j`)              |
 | Docs       | springdoc-openapi 3.1.0 (Swagger UI)                                    |
-| Build      | Maven                                                                   |
+| Frontend   | React 18, TypeScript, Vite, React Router, axios, nginx                  |
+| Build      | Maven (backend), npm/Vite (frontend)                                    |
 | Testing    | JUnit 5, Mockito, AssertJ, Testcontainers 1.21.4                        |
-| DevOps     | Docker (multi-stage), Docker Compose, Docker Hub                        |
+| DevOps     | Docker (two images), Docker Compose, Docker Hub                         |
 
 ## Project Structure
 
 ```
 clinicsystem/
-├── Dockerfile                     # Multi-stage build (Maven -> Temurin 21 JRE)
-├── docker-compose.yml             # MySQL 8.4 + app, healthcheck, volume
+├── Dockerfile                     # Backend: multi-stage build (Maven -> Temurin 21 JRE)
+├── docker-compose.yml             # MySQL 8.4 + Redis 7 + backend + frontend (nginx)
 ├── .env.example                   # Copy to .env for compose deployment
 ├── pom.xml
-└── src/
-    ├── main/
-    │   ├── java/com/clinicsystem/
-    │   │   ├── controller/        # REST endpoints (auth, doctors, schedules,
-    │   │   │                      #  appointments, medical-records, admin)
-    │   │   ├── service/           # Business logic interfaces + impl/
-    │   │   ├── repository/        # Spring Data repositories
-    │   │   ├── entity/            # User, Doctor, Patient, Schedule,
-    │   │   │                      #  Appointment, MedicalRecord + enums
-    │   │   ├── dto/               # request/ + response/ (incl. PageResponse)
-    │   │   ├── security/          # JwtService, JwtAuthFilter, rate limiting,
-    │   │   │                      #  authenticated-user resolution
-    │   │   ├── config/            # SecurityConfig, AdminBootstrap, OpenApiConfig
-    │   │   └── exception/         # Custom exceptions + GlobalExceptionHandler
-    │   └── resources/application.properties
-    └── test/
-        ├── java/com/clinicsystem/        # Controller integration tests + base class
-        │   └── service/                  # Mockito unit tests
-        └── resources/application.properties   # Test config (shadows main on classpath)
+├── src/                           # Backend code
+│   ├── main/
+│   │   ├── java/com/clinicsystem/
+│   │   │   ├── controller/        # REST endpoints (auth, doctors, schedules,
+│   │   │   │                      #  appointments, medical-records, admin)
+│   │   │   ├── service/           # Business logic interfaces + impl/
+│   │   │   ├── repository/        # Spring Data repositories
+│   │   │   ├── entity/            # User, Doctor, Patient, Schedule,
+│   │   │   │                      #  Appointment, MedicalRecord + enums
+│   │   │   ├── dto/               # request/ + response/ (incl. PageResponse)
+│   │   │   ├── security/          # JwtService, JwtAuthFilter, rate limiting,
+│   │   │   │                      #  authenticated-user resolution
+│   │   │   ├── config/            # SecurityConfig, AdminBootstrap, OpenApiConfig
+│   │   │   └── exception/         # Custom exceptions + GlobalExceptionHandler
+│   │   └── resources/application.properties
+│   └── test/
+│       ├── java/com/clinicsystem/        # Controller integration tests + base class
+│       │   └── service/                  # Mockito unit tests
+│       └── resources/application.properties   # Test config (shadows main on classpath)
+└── frontend/                      # Frontend code (fully separate codebase)
+    ├── Dockerfile                 # Frontend: node build -> nginx (serves SPA + /api proxy)
+    ├── nginx/default.conf.template
+    ├── package.json               # React 18 + TypeScript + Vite + axios
+    ├── vite.config.ts             # dev proxy: /api -> localhost:8080
+    └── src/
+        ├── api/                   # axios instance (JWT interceptor) + per-resource calls
+        ├── pages/                 # Login, Register, PatientHome, DoctorDetail,
+        │                          #  DoctorHome, AdminHome
+        ├── components/            # Layout (role-aware navbar), shared UI
+        ├── auth.tsx               # session (localStorage) + role-guarded routes
+        ├── types.ts               # DTO types mirroring the backend responses
+        └── styles.css
 ```
 
 ## Getting Started
@@ -68,10 +82,11 @@ clinicsystem/
 
 - Java 21
 - Maven 3.9+
+- Node.js 22+ (only for developing the frontend locally)
 - MySQL 8.x (for local runs) — or Docker for the containerized path
 - Docker Desktop (only for integration tests / compose)
 
-### 1. Run locally
+### 1. Run locally (backend only)
 
 Create a MySQL database (the default JDBC URL uses `createDatabaseIfNotExist=true`), then:
 
@@ -82,25 +97,47 @@ mvn spring-boot:run
 
 The app starts on `http://localhost:8080`. Swagger UI: <http://localhost:8080/swagger-ui.html>.
 
-### 2. Run with Docker Compose
+### 2. Run the frontend in dev mode
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, proxies /api to http://localhost:8080
+```
+
+### 3. Run with Docker Compose (frontend + backend + MySQL + Redis)
 
 ```bash
 cp .env.example .env    # adjust secrets (DB_PASSWORD, JWT_SECRET, ADMIN_PASSWORD)
 docker compose up -d
 ```
 
-This starts `clinic-mysql` (MySQL 8.4), `clinic-redis` (Redis 7) and `clinic-app` (built image or `youssefyaser/clinicsystem:latest`) with a healthcheck-gated startup order. `clinic-app` itself has a container healthcheck that curls `/actuator/health`, so `docker compose ps` shows `healthy` once the app is ready.
+This starts five containers with a healthcheck-gated startup order:
 
-### 3. Build & run the Docker image yourself
+| Service        | Container      | Host            | Purpose                              |
+|----------------|----------------|-----------------|--------------------------------------|
+| `db`           | `clinic-mysql` | `localhost:3306` (change with `DB_PORT`) | MySQL 8.4 |
+| `redis`        | `clinic-redis` | `localhost:6379` | Redis 7 (distributed rate limiting) |
+| `app`          | `clinic-app`   | `localhost:8081` | Backend API + Swagger UI |
+| `frontend`     | `clinic-frontend` | `localhost:8080` | SPA (React) served by nginx |
+
+The frontend at `http://localhost:8080` calls `/api/*`, which nginx reverse-proxies to the backend, so the browser never talks to the backend directly (no CORS setup needed). Swagger UI stays at <http://localhost:8081/swagger-ui.html>. The backend healthcheck curls `/actuator/health`, so `docker compose ps` shows `healthy` once the app is ready.
+
+### 4. Build & run the Docker images yourself
 
 ```bash
 docker build -t youssefyaser/clinicsystem:latest .
-docker run -p 8080:8080 \
+docker run -p 8081:8080 \
   -e DB_URL="jdbc:mysql://host.docker.internal:3306/clinic?useSSL=false&allowPublicKeyRetrieval=true" \
   -e DB_USERNAME=root \
   -e DB_PASSWORD=your_password \
   -e JWT_SECRET="a_long_random_string_at_least_32_chars" \
   youssefyaser/clinicsystem:latest
+
+docker build -t youssefyaser/clinicsystem-frontend:latest ./frontend
+docker run -p 8080:80 \
+  -e BACKEND_HOST=host.docker.internal:8081 \
+  youssefyaser/clinicsystem-frontend:latest
 ```
 
 ## Configuration
@@ -112,6 +149,7 @@ All settings can be overridden with environment variables.
 | `DB_URL`                     | `jdbc:mysql://localhost:3306/clinic?...`                                | JDBC URL (uses `allowPublicKeyRetrieval`)|
 | `DB_USERNAME`                | `root`                                                                  | Database user                            |
 | `DB_PASSWORD`                | `123123`                                                                | Database password                        |
+| `DB_PORT`                    | `3306`                                                                  | Host port for MySQL in compose (use `3307` if a local MySQL already runs on 3306) |
 | `JWT_SECRET`                 | dev placeholder                                                         | JWT signing key (≥ 32 chars for HS256)   |
 | `JWT_EXPIRATION_MS`          | `86400000` (24h)                                                        | Token lifetime                           |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | `admin@clinic.com` / `Admin@12345` / `Clinic Admin` | First admin account, created on startup only if no admin exists |
@@ -287,6 +325,12 @@ mvn test
 - `src/test/java/com/clinicsystem/` — controller integration tests (MockMvc + Testcontainers), incl. `ActuatorTest` (health/probes/metrics reachability).
 - `src/test/java/com/clinicsystem/service/` — pure Mockito unit tests.
 - `src/test/java/com/clinicsystem/security/` — rate limiter unit tests (`InMemoryRateLimiterTest`, `RedisRateLimiterTest`).
+
+Frontend (no test framework wired up yet — the `npm run build` step type-checks everything with TypeScript):
+
+```bash
+cd frontend && npm run build
+```
 - `src/test/resources/application.properties` shadows the main one on the test classpath; keep the `app.*`, `jwt.*` keys in sync when adding config.
 
 ## Contributing
