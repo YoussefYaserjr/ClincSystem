@@ -190,6 +190,27 @@ Notes:
 - `management.health.redis.enabled` defaults to `false` (override with `REDIS_HEALTH_ENABLED=true`). Redis is optional — the rate limiter fails open — so by default an unreachable Redis does **not** mark the pod `DOWN`. Enable it when your deployment treats Redis as a hard dependency.
 - The `spring-boot-maven-plugin` generates `build-info.properties`, which feeds `/actuator/info`.
 
+## Request logs (Tomcat access log)
+
+Every HTTP request is written to a **file** (not the console) by the embedded Tomcat access log:
+
+| Setting | Default | Description |
+|---|---|---|
+| `server.tomcat.accesslog.enabled` | `true` | On/off |
+| `server.tomcat.accesslog.directory` | `logs` | Where the files land (`logs/access_log.2026-08-09.log`) |
+| `server.tomcat.accesslog.pattern` | `%h %t %m %U %s %b %D` | IP, timestamp, method, URI, status, bytes, time (µs) |
+| `server.tomcat.accesslog.rotate` / `file-date-format` | `true` / `.yyyy-MM-dd` | One file per day |
+
+Example line:
+
+```
+172.17.0.1 [09/Aug/2026:09:03:23 +0000] GET /doctors 200 78 1705454
+```
+
+- **IDE/dev run:** files appear in the project's `logs/` folder (gitignored).
+- **Docker:** the `app` service overrides the directory to `/logs` and mounts the named volume `app-logs`, so `docker compose up -d` + `docker volume inspect clinic-app-logs` (or `docker compose cp app:/logs/access_log... ./`) gives you the file. Set `SERVER_TOMCAT_ACCESSLOG_ENABLED=false` to turn it off.
+- Useful pattern tokens: `%{User-Agent}i` (browser), `%a` (full address), `%D` (µs) / `%F` (ms) / `%T` (s).
+
 ## Distributed rate limiting (how we solved the multi-instance problem)
 
 **The problem.** The original limiter used a `ConcurrentHashMap` inside each running app (`InMemoryRateLimiter`). That is fine while there is exactly one instance, but as soon as you scale out behind a load balancer each replica keeps its **own** counter, so the limit is effectively multiplied by the number of replicas — and a bursty client can simply be routed to a different instance to dodge the limit.

@@ -17,6 +17,9 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 app && \
     adduser --system --uid 1001 --ingroup app app
 
+# Writable dir for the Tomcat request access log (mounted as a volume in compose)
+RUN mkdir -p /logs && chown -R app:app /logs
+
 # curl is used by the container healthcheck (/actuator/health)
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 

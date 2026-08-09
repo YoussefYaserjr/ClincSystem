@@ -41,6 +41,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # Request access log: one line per request written to /logs (volume-mounted below)
+      SERVER_TOMCAT_ACCESSLOG_ENABLED: "true"
+      SERVER_TOMCAT_ACCESSLOG_DIRECTORY: /logs
+    volumes:
+      - app-logs:/logs
     ports:
       - "8081:8080"
     healthcheck:
@@ -75,3 +80,4 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  app-logs:
