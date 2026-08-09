@@ -18,6 +18,7 @@ Containerized with Docker and published to Docker Hub as [`youssefyaser/clinicsy
 - **Rate limiting** — IP-based fixed-window limits on `/auth/**` and appointment booking. Single-instance (in-memory) by default, or **distributed via Redis** so the budget is shared across every replica behind a load balancer (disabled by default).
 - **Email notifications** — hooks on appointment events; logs instead of sending when disabled (default), or send real email via `spring.mail.*`.
 - **Swagger UI** — interactive API documentation at `/swagger-ui.html`.
+- **Health & metrics** — Spring Boot Actuator at `/actuator/health` (with Kubernetes `liveness`/`readiness` probes), `/actuator/metrics` and `/actuator/prometheus` for orchestrators to ping.
 - **Test suite** — pure-Mockito service unit tests plus Testcontainers-backed integration tests against a real MySQL 8.4.
 
 ## Tech Stack
@@ -88,7 +89,7 @@ cp .env.example .env    # adjust secrets (DB_PASSWORD, JWT_SECRET, ADMIN_PASSWOR
 docker compose up -d
 ```
 
-This starts `clinic-mysql` (MySQL 8.4), `clinic-redis` (Redis 7) and `clinic-app` (built image or `youssefyaser/clinicsystem:latest`) with a healthcheck-gated startup order.
+This starts `clinic-mysql` (MySQL 8.4), `clinic-redis` (Redis 7) and `clinic-app` (built image or `youssefyaser/clinicsystem:latest`) with a healthcheck-gated startup order. `clinic-app` itself has a container healthcheck that curls `/actuator/health`, so `docker compose ps` shows `healthy` once the app is ready.
 
 ### 3. Build & run the Docker image yourself
 
@@ -118,10 +119,38 @@ All settings can be overridden with environment variables.
 | `RATE_LIMIT_ENABLED`         | `false`                                                                 | When `true`, enforces the limits below   |
 | `RATE_LIMIT_STORE`           | `memory`                                                                | Rate-limit backend: `memory` (single instance) or `redis` (distributed across replicas) |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / *(empty)*                    | Redis connection (used when `RATE_LIMIT_STORE=redis`) |
+| `REDIS_HEALTH_ENABLED`       | `false`                                                                 | When `true`, `/actuator/health` turns `DOWN` if Redis is unreachable (default `false`: Redis is optional, the rate limiter fails open) |
 | `RATE_LIMIT_AUTH_MAX` / `RATE_LIMIT_AUTH_WINDOW` | `20` / `60`                                            | Max `/auth/**` requests per window (seconds) |
 | `RATE_LIMIT_BOOKING_MAX` / `RATE_LIMIT_BOOKING_WINDOW` | `10` / `60`                                        | Max `POST /appointments` per window      |
 
 > **Important:** never use the default `JWT_SECRET` or admin credentials in production. Admin accounts cannot be self-registered — they are only created via `ADMIN_EMAIL`/`ADMIN_PASSWORD` at startup.
+
+## Health & metrics (Actuator)
+
+Actuator endpoints are public (no auth) so orchestrators can ping them:
+
+| Endpoint                          | Purpose                                                        |
+|-----------------------------------|----------------------------------------------------------------|
+| `/actuator/health`                | Overall status (`UP`/`DOWN`), includes DB health detail        |
+| `/actuator/health/liveness`       | Kubernetes liveness probe — `UP` while the JVM is alive       |
+| `/actuator/health/readiness`      | Kubernetes readiness probe — `UP` when the app can serve      |
+| `/actuator/metrics`               | JVM / HTTP / DB metrics                                        |
+| `/actuator/prometheus`            | Prometheus scrape endpoint (Micrometer)                        |
+| `/actuator/info`                  | Build info (version, time) from `build-info.properties`        |
+
+Use in Kubernetes:
+
+```yaml
+livenessProbe:
+  httpGet: { path: /actuator/health/liveness, port: 8080 }
+readinessProbe:
+  httpGet: { path: /actuator/health/readiness, port: 8080 }
+```
+
+Notes:
+
+- `management.health.redis.enabled` defaults to `false` (override with `REDIS_HEALTH_ENABLED=true`). Redis is optional — the rate limiter fails open — so by default an unreachable Redis does **not** mark the pod `DOWN`. Enable it when your deployment treats Redis as a hard dependency.
+- The `spring-boot-maven-plugin` generates `build-info.properties`, which feeds `/actuator/info`.
 
 ## Distributed rate limiting (how we solved the multi-instance problem)
 
@@ -255,7 +284,7 @@ The integration tests boot a real MySQL 8.4 via **Testcontainers**, so Docker mu
 mvn test
 ```
 
-- `src/test/java/com/clinicsystem/` — controller integration tests (MockMvc + Testcontainers).
+- `src/test/java/com/clinicsystem/` — controller integration tests (MockMvc + Testcontainers), incl. `ActuatorTest` (health/probes/metrics reachability).
 - `src/test/java/com/clinicsystem/service/` — pure Mockito unit tests.
 - `src/test/java/com/clinicsystem/security/` — rate limiter unit tests (`InMemoryRateLimiterTest`, `RedisRateLimiterTest`).
 - `src/test/resources/application.properties` shadows the main one on the test classpath; keep the `app.*`, `jwt.*` keys in sync when adding config.

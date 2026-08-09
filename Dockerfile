@@ -17,6 +17,9 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 app && \
     adduser --system --uid 1001 --ingroup app app
 
+# curl is used by the container healthcheck (/actuator/health)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/target/clinicsystem-0.0.1-SNAPSHOT.jar app.jar
 
 USER app

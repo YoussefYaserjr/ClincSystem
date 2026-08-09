@@ -64,6 +64,10 @@ public class SecurityConfig {
                         // OpenAPI / Swagger UI
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
 
+                        // Actuator for orchestrators (k8s liveness/readiness probes, health, metrics scraping)
+                        .requestMatchers("/actuator/health/**", "/actuator/info",
+                                "/actuator/metrics/**", "/actuator/prometheus").permitAll()
+
                         // Public auth
                         .requestMatchers("/auth/**").permitAll()
 
