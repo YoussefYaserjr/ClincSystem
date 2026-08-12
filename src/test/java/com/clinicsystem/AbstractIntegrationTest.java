@@ -86,6 +86,7 @@ public abstract class AbstractIntegrationTest {
         var node = objectMapper.readTree(result.getResponse().getContentAsString());
         return AuthResponse.builder()
                 .token(node.get("token").asText())
+                .refreshToken(node.get("refreshToken").asText())
                 .userId(node.get("userId").asLong())
                 .role(node.get("role").asText())
                 .build();

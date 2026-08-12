@@ -3,6 +3,7 @@ package com.clinicsystem;
 import com.clinicsystem.dto.response.AuthResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.Map;
 
@@ -117,5 +118,64 @@ class AuthControllerTest extends AbstractIntegrationTest {
     @Test
     void loginRejectsUnknownEmail() throws Exception {
         loginExpect("nobody@test.com", "password123", 401);
+    }
+
+    @Test
+    void registerAndLoginReturnRefreshToken() throws Exception {
+        AuthResponse res = registerPatient();
+
+        assertThat(res.getRefreshToken()).isNotBlank();
+    }
+
+    @Test
+    void refreshReturnsNewTokenPair() throws Exception {
+        AuthResponse login = loginAndGet();
+
+        mockMvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "refreshToken", login.getRefreshToken()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.userId").value(login.getUserId().intValue()))
+                .andExpect(jsonPath("$.role").value("PATIENT"));
+    }
+
+    @Test
+    void refreshRejectsInvalidToken() throws Exception {
+        mockMvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "refreshToken", "not-a-jwt"))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refreshRejectsMissingToken() throws Exception {
+        mockMvc.perform(post("/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of())))
+                .andExpect(status().isBadRequest());
+    }
+
+    private AuthResponse loginAndGet() throws Exception {
+        String email = "refresh-" + System.nanoTime() + "@test.com";
+        register(email, "PATIENT", null, null);
+
+        MvcResult result = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", email, "password", "password123"))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        var node = objectMapper.readTree(result.getResponse().getContentAsString());
+        return AuthResponse.builder()
+                .token(node.get("token").asText())
+                .refreshToken(node.get("refreshToken").asText())
+                .userId(node.get("userId").asLong())
+                .role(node.get("role").asText())
+                .build();
     }
 }

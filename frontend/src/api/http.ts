@@ -1,30 +1,65 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
+import { getSession, updateSession } from '../auth';
+import type { AuthResponse } from '../types';
 
 const http = axios.create({ baseURL: '/api' });
 
 http.interceptors.request.use((config) => {
-  const raw = localStorage.getItem('clinic.user');
-  if (raw) {
-    try {
-      const token = JSON.parse(raw).token as string;
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-    } catch {
-      // ignore malformed stored session
-    }
-  }
+  const token = getSession()?.token;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+let refreshPromise: Promise<AuthResponse> | null = null;
+
+function refreshSession(): Promise<AuthResponse> {
+  if (!refreshPromise) {
+    const refreshToken = getSession()?.refreshToken;
+    refreshPromise = axios
+      .post<AuthResponse>('/api/auth/refresh', { refreshToken })
+      .then((res) => {
+        updateSession({
+          userId: res.data.userId,
+          role: res.data.role,
+          token: res.data.token,
+          refreshToken: res.data.refreshToken,
+        });
+        return res.data;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+function forceLogin() {
+  updateSession(null);
+  if (window.location.hash !== '#/login') {
+    window.location.hash = '#/login';
+  }
+}
+
 http.interceptors.response.use(
   (res) => res,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('clinic.user');
-      if (window.location.hash !== '#/login') {
-        window.location.hash = '#/login';
-      }
+  async (error) => {
+    const status = error.response?.status;
+    const config = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
+    if (status !== 401 || config?.url === '/auth/refresh' || config?._retried) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+    if (!getSession()?.refreshToken) {
+      forceLogin();
+      return Promise.reject(error);
+    }
+    try {
+      await refreshSession();
+      config._retried = true;
+      return http.request(config);
+    } catch {
+      forceLogin();
+      return Promise.reject(error);
+    }
   }
 );
 

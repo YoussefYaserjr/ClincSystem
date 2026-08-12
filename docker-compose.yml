@@ -33,6 +33,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-123123}
       JWT_SECRET: ${JWT_SECRET:-replace_this_with_a_long_random_base64_string_at_least_256_bits_for_hs256}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@clinic.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
       # Distributed rate limiting (RATE_LIMIT_STORE=redis) across replicas

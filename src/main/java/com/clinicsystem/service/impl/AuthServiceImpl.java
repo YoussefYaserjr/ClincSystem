@@ -10,8 +10,10 @@ import com.clinicsystem.entity.enums.Role;
 import com.clinicsystem.repository.UserRepository;
 import com.clinicsystem.security.JwtService;
 import com.clinicsystem.service.AuthService;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -68,15 +70,7 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.save(user);
 
-        UserDetails userDetails = org.springframework.security.core.userdetails.User
-                .withUsername(user.getEmail()).password(user.getPassword())
-                .authorities("ROLE_" + user.getRole()).build();
-
-        return AuthResponse.builder()
-                .token(jwtService.generateToken(userDetails))
-                .userId(user.getId())
-                .role(user.getRole().name())
-                .build();
+        return buildAuthResponse(user);
     }
 
     @Override
@@ -87,14 +81,41 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
-        UserDetails userDetails = org.springframework.security.core.userdetails.User
-                .withUsername(user.getEmail()).password(user.getPassword())
-                .authorities("ROLE_" + user.getRole()).build();
+        return buildAuthResponse(user);
+    }
 
+    @Override
+    public AuthResponse refresh(String refreshToken) {
+        User user;
+        try {
+            String email = jwtService.extractUsername(refreshToken);
+            user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new BadCredentialsException("Invalid or expired refresh token"));
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new BadCredentialsException("Invalid or expired refresh token");
+        }
+
+        UserDetails userDetails = toUserDetails(user);
+        if (!jwtService.isRefreshTokenValid(refreshToken, userDetails)) {
+            throw new BadCredentialsException("Invalid or expired refresh token");
+        }
+
+        return buildAuthResponse(user);
+    }
+
+    private AuthResponse buildAuthResponse(User user) {
+        UserDetails userDetails = toUserDetails(user);
         return AuthResponse.builder()
                 .token(jwtService.generateToken(userDetails))
+                .refreshToken(jwtService.generateRefreshToken(userDetails))
                 .userId(user.getId())
                 .role(user.getRole().name())
                 .build();
+    }
+
+    private UserDetails toUserDetails(User user) {
+        return org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail()).password(user.getPassword())
+                .authorities("ROLE_" + user.getRole()).build();
     }
 }

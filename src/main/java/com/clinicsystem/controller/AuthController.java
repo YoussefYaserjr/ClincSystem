@@ -1,6 +1,7 @@
 package com.clinicsystem.controller;
 
 import com.clinicsystem.dto.request.LoginRequest;
+import com.clinicsystem.dto.request.RefreshTokenRequest;
 import com.clinicsystem.dto.request.RegisterRequest;
 import com.clinicsystem.dto.response.AuthResponse;
 import com.clinicsystem.service.AuthService;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Register and login endpoints")
+@Tag(name = "Authentication", description = "Register, login and refresh endpoints")
 public class AuthController {
 
     private final AuthService authService;
@@ -29,5 +30,11 @@ public class AuthController {
     @Operation(summary = "Login", description = "Authenticate with email and password and receive a JWT.")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.login(req));
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Refresh access token", description = "Exchange a valid refresh token for a new access token.")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest req) {
+        return ResponseEntity.ok(authService.refresh(req.getRefreshToken()));
     }
 }

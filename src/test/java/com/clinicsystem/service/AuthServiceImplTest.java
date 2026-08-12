@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class AuthServiceImplTest {
@@ -71,12 +72,14 @@ class AuthServiceImplTest {
             return saved;
         });
         when(jwtService.generateToken(any(UserDetails.class))).thenReturn("jwt-token");
+        when(jwtService.generateRefreshToken(any(UserDetails.class))).thenReturn("refresh-token");
 
         AuthResponse response = service.register(patientRequest("p@test.com"));
 
         assertThat(response.getRole()).isEqualTo("PATIENT");
         assertThat(response.getUserId()).isEqualTo(3L);
         assertThat(response.getToken()).isEqualTo("jwt-token");
+        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
         verify(userRepository).save(argThat(user -> user instanceof Patient));
     }
 
@@ -133,6 +136,7 @@ class AuthServiceImplTest {
         User user = Patient.builder().id(3L).email("p@test.com").password("hashed").role(Role.PATIENT).build();
         when(userRepository.findByEmail("p@test.com")).thenReturn(Optional.of(user));
         when(jwtService.generateToken(any(UserDetails.class))).thenReturn("jwt-token");
+        when(jwtService.generateRefreshToken(any(UserDetails.class))).thenReturn("refresh-token");
 
         LoginRequest request = new LoginRequest();
         request.setEmail("p@test.com");
@@ -142,6 +146,7 @@ class AuthServiceImplTest {
 
         assertThat(response.getRole()).isEqualTo("PATIENT");
         assertThat(response.getToken()).isEqualTo("jwt-token");
+        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
     }
 
@@ -155,6 +160,44 @@ class AuthServiceImplTest {
         request.setPassword("password123");
 
         assertThatThrownBy(() -> service.login(request))
+                .isInstanceOf(BadCredentialsException.class);
+    }
+
+    @Test
+    void refreshReturnsNewTokenPairForValidRefreshToken() {
+        User user = Patient.builder().id(3L).email("p@test.com").password("hashed").role(Role.PATIENT).build();
+        when(jwtService.extractUsername("refresh-token")).thenReturn("p@test.com");
+        when(userRepository.findByEmail("p@test.com")).thenReturn(Optional.of(user));
+        when(jwtService.isRefreshTokenValid(eq("refresh-token"), any(UserDetails.class))).thenReturn(true);
+        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("new-access");
+        when(jwtService.generateRefreshToken(any(UserDetails.class))).thenReturn("new-refresh");
+
+        AuthResponse response = service.refresh("refresh-token");
+
+        assertThat(response.getToken()).isEqualTo("new-access");
+        assertThat(response.getRefreshToken()).isEqualTo("new-refresh");
+        assertThat(response.getRole()).isEqualTo("PATIENT");
+        assertThat(response.getUserId()).isEqualTo(3L);
+    }
+
+    @Test
+    void refreshRejectsExpiredRefreshToken() {
+        User user = Patient.builder().id(3L).email("p@test.com").password("hashed").role(Role.PATIENT).build();
+        when(jwtService.extractUsername("refresh-token")).thenReturn("p@test.com");
+        when(userRepository.findByEmail("p@test.com")).thenReturn(Optional.of(user));
+        when(jwtService.isRefreshTokenValid(eq("refresh-token"), any(UserDetails.class))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.refresh("refresh-token"))
+                .isInstanceOf(BadCredentialsException.class)
+                .hasMessageContaining("Invalid or expired refresh token");
+    }
+
+    @Test
+    void refreshRejectsUnknownUser() {
+        when(jwtService.extractUsername("refresh-token")).thenReturn("ghost@test.com");
+        when(userRepository.findByEmail("ghost@test.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.refresh("refresh-token"))
                 .isInstanceOf(BadCredentialsException.class);
     }
 }

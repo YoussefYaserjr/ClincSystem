@@ -151,7 +151,8 @@ All settings can be overridden with environment variables.
 | `DB_PASSWORD`                | `123123`                                                                | Database password                        |
 | `DB_PORT`                    | `3306`                                                                  | Host port for MySQL in compose (use `3307` if a local MySQL already runs on 3306) |
 | `JWT_SECRET`                 | dev placeholder                                                         | JWT signing key (≥ 32 chars for HS256)   |
-| `JWT_EXPIRATION_MS`          | `86400000` (24h)                                                        | Token lifetime                           |
+| `JWT_EXPIRATION_MS`          | `86400000` (24h)                                                        | Access token lifetime                        |
+| `JWT_REFRESH_EXPIRATION_MS`  | `604800000` (7d)                                                        | Refresh token lifetime (keeps you signed in) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` | `admin@clinic.com` / `Admin@12345` / `Clinic Admin` | First admin account, created on startup only if no admin exists |
 | `NOTIFICATIONS_ENABLED`      | `false`                                                                 | When `true` + `spring.mail.*` set, sends real emails |
 | `RATE_LIMIT_ENABLED`         | `false`                                                                 | When `true`, enforces the limits below   |
@@ -257,15 +258,20 @@ curl -X POST http://localhost:8080/auth/register \
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"smith@clinic.com","password":"password123"}'
+
+# Refresh a short-lived access token when it expires (keeps you signed in)
+curl -X POST http://localhost:8080/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refresh_token>"}'
 ```
 
 Response:
 
 ```json
-{ "token": "eyJhbGciOiJIUzI1NiJ9...", "userId": 2, "role": "DOCTOR" }
+{ "token": "eyJhbGciOiJIUzI1NiJ9...", "refreshToken": "eyJhbGciOiJIUzI1NiJ9...", "userId": 2, "role": "DOCTOR" }
 ```
 
-Send the token on protected endpoints:
+Send the access token on protected endpoints. When it expires (after `JWT_EXPIRATION_MS`), the frontend automatically exchanges the long-lived refresh token (from `JWT_REFRESH_EXPIRATION_MS`) for a new pair at `/auth/refresh`, so the session keeps working without re-login. Both tokens are rotated on every refresh; the session ends only when the refresh token itself expires.
 
 ```bash
 curl http://localhost:8080/appointments/me -H "Authorization: Bearer <token>"
@@ -280,7 +286,8 @@ Interactive docs: <http://localhost:8080/swagger-ui.html>
 | Method | Path                       | Description                                     |
 |--------|----------------------------|-------------------------------------------------|
 | POST   | `/auth/register`           | Register a `PATIENT` or `DOCTOR` (not `ADMIN`)  |
-| POST   | `/auth/login`              | Login, returns a JWT                            |
+| POST   | `/auth/login`              | Login, returns access + refresh tokens          |
+| POST   | `/auth/refresh`            | Exchange a valid refresh token for a new token pair |
 | GET    | `/doctors`                 | Approved doctors, filter by `specialty`/`location`, `page`/`size` |
 | GET    | `/doctors/{id}`            | Approved doctor by id                           |
 | GET    | `/search/doctors`          | Alias for `/doctors` filtering                  |
