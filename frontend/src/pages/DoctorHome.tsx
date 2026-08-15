@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { appointmentsApi, schedulesApi } from '../api/api';
+import { appointmentsApi, medicalRecordsApi, schedulesApi } from '../api/api';
 import { useAuth } from '../auth';
 import { ErrorBox, Loading, Pagination, StatusBadge, formatDateTime } from '../components/ui';
-import type { AppointmentResponse, PageResponse, ScheduleResponse } from '../types';
+import type { AppointmentResponse, MedicalRecordResponse, PageResponse, ScheduleResponse } from '../types';
 
-type Tab = 'slots' | 'appointments';
+type Tab = 'slots' | 'appointments' | 'records';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -27,11 +27,19 @@ export default function DoctorHome() {
         >
           Appointments
         </button>
+        <button
+          className={tab === 'records' ? 'tab active' : 'tab'}
+          onClick={() => setTab('records')}
+        >
+          Medical records
+        </button>
       </div>
       {tab === 'slots' ? (
         <SlotsTab doctorId={session?.userId} />
-      ) : (
+      ) : tab === 'appointments' ? (
         <AppointmentsTab />
+      ) : (
+        <RecordsTab />
       )}
     </div>
   );
@@ -210,6 +218,143 @@ function AppointmentsTab() {
         </table>
       )}
       <Pagination page={page} totalPages={appointments.totalPages} onChange={setPage} />
+    </div>
+  );
+}
+
+function RecordsTab() {
+  const [records, setRecords] = useState<PageResponse<MedicalRecordResponse> | null>(null);
+  const [completed, setCompleted] = useState<AppointmentResponse[]>([]);
+  const [page, setPage] = useState(0);
+  const [appointmentId, setAppointmentId] = useState('');
+  const [diagnosis, setDiagnosis] = useState('');
+  const [prescription, setPrescription] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setRecords(await medicalRecordsApi.mine({ page, size: 10 }));
+      const appts = await appointmentsApi.mine({ status: 'COMPLETED', page: 0, size: 100 });
+      setCompleted(appts.content);
+      setError('');
+    } catch {
+      setError('Could not load medical records.');
+    }
+  }, [page]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    const appt = completed.find((a) => a.id === Number(appointmentId));
+    if (!appt) {
+      setError('Choose a completed appointment.');
+      return;
+    }
+    try {
+      await medicalRecordsApi.create({
+        patientId: appt.patientId,
+        appointmentId: appt.id,
+        diagnosis,
+        prescription: prescription || undefined,
+        notes: notes || undefined,
+      });
+      setMsg('Medical record created.');
+      setAppointmentId('');
+      setDiagnosis('');
+      setPrescription('');
+      setNotes('');
+      await load();
+    } catch {
+      setError('Could not create medical record.');
+    }
+  }
+
+  async function remove(id: number) {
+    try {
+      await medicalRecordsApi.remove(id);
+      setMsg('Medical record deleted.');
+      await load();
+    } catch {
+      setError('Could not delete medical record.');
+    }
+  }
+
+  return (
+    <div>
+      <ErrorBox message={error} />
+      {msg && <div className="success">{msg}</div>}
+
+      <h2>Create record</h2>
+      <form className="filters" onSubmit={create}>
+        <select value={appointmentId} onChange={(e) => setAppointmentId(e.target.value)} required>
+          <option value="">Completed appointment...</option>
+          {completed.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.patientName} — {formatDateTime(a.appointmentTime)}
+            </option>
+          ))}
+        </select>
+        <input
+          placeholder="Diagnosis"
+          value={diagnosis}
+          onChange={(e) => setDiagnosis(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Prescription (optional)"
+          value={prescription}
+          onChange={(e) => setPrescription(e.target.value)}
+        />
+        <input placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <button className="primary" type="submit">
+          Add record
+        </button>
+      </form>
+
+      {!records ? (
+        <Loading label="Loading medical records..." />
+      ) : (
+        <>
+          {records.content.length === 0 ? (
+            <p className="muted">No medical records yet.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th>Date</th>
+                  <th>Diagnosis</th>
+                  <th>Prescription</th>
+                  <th>Notes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.content.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.patientName}</td>
+                    <td>{formatDateTime(r.createdAt)}</td>
+                    <td>{r.diagnosis}</td>
+                    <td>{r.prescription || '-'}</td>
+                    <td>{r.notes || '-'}</td>
+                    <td className="actions">
+                      <button className="ghost" onClick={() => remove(r.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <Pagination page={page} totalPages={records.totalPages} onChange={setPage} />
+        </>
+      )}
     </div>
   );
 }

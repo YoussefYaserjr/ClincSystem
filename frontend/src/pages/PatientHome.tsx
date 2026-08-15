@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { appointmentsApi, doctorsApi } from '../api/api';
+import { appointmentsApi, doctorsApi, medicalRecordsApi } from '../api/api';
+import { useAuth } from '../auth';
 import { ErrorBox, Loading, Pagination, StatusBadge, formatDateTime, money } from '../components/ui';
-import type { AppointmentResponse, DoctorResponse, PageResponse } from '../types';
+import type { AppointmentResponse, DoctorResponse, MedicalRecordResponse, PageResponse } from '../types';
 
 const PAGE_SIZE = 10;
 
 export default function PatientHome() {
+  const { session } = useAuth();
   const [specialty, setSpecialty] = useState('');
   const [location, setLocation] = useState('');
   const [doctors, setDoctors] = useState<PageResponse<DoctorResponse> | null>(null);
   const [page, setPage] = useState(0);
   const [appointments, setAppointments] = useState<AppointmentResponse[]>([]);
+  const [records, setRecords] = useState<MedicalRecordResponse[]>([]);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -39,6 +42,16 @@ export default function PatientHome() {
     }
   }, []);
 
+  const loadRecords = useCallback(async () => {
+    if (!session?.userId) return;
+    try {
+      const data = await medicalRecordsApi.forPatient(session.userId, { page: 0, size: 50 });
+      setRecords(data.content);
+    } catch {
+      // ignore; records list is secondary
+    }
+  }, [session?.userId]);
+
   useEffect(() => {
     loadDoctors();
   }, [loadDoctors]);
@@ -46,6 +59,10 @@ export default function PatientHome() {
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
+
+  useEffect(() => {
+    loadRecords();
+  }, [loadRecords]);
 
   async function search(e: FormEvent) {
     e.preventDefault();
@@ -140,6 +157,34 @@ export default function PatientHome() {
                     </button>
                   )}
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h2>My medical records</h2>
+      {records.length === 0 ? (
+        <p className="muted">No medical records yet.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Doctor</th>
+              <th>Date</th>
+              <th>Diagnosis</th>
+              <th>Prescription</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.map((r) => (
+              <tr key={r.id}>
+                <td>{r.doctorName}</td>
+                <td>{formatDateTime(r.createdAt)}</td>
+                <td>{r.diagnosis}</td>
+                <td>{r.prescription || '-'}</td>
+                <td>{r.notes || '-'}</td>
               </tr>
             ))}
           </tbody>

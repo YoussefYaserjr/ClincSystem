@@ -3,6 +3,7 @@ import type {
   AppointmentResponse,
   AuthResponse,
   DoctorResponse,
+  MedicalRecordResponse,
   PageResponse,
   RegisterRequest,
   ScheduleResponse,
@@ -48,6 +49,27 @@ export const appointmentsApi = {
     http.post<AppointmentResponse>(`/appointments/${id}/complete`).then((r) => r.data),
 };
 
+export interface CreateMedicalRecordPayload {
+  patientId: number;
+  appointmentId: number;
+  diagnosis: string;
+  prescription?: string;
+  notes?: string;
+}
+
+export const medicalRecordsApi = {
+  create: (data: CreateMedicalRecordPayload) =>
+    http.post<MedicalRecordResponse>('/medical-records', data).then((r) => r.data),
+  forPatient: (patientId: number, params: { page?: number; size?: number }) =>
+    http
+      .get<PageResponse<MedicalRecordResponse>>(`/medical-records/patient/${patientId}`, { params })
+      .then((r) => r.data),
+  mine: (params: { page?: number; size?: number }) =>
+    http.get<PageResponse<MedicalRecordResponse>>('/medical-records/mine', { params }).then((r) => r.data),
+  remove: (id: number) =>
+    http.delete<void>(`/medical-records/${id}`).then((r) => r.data),
+};
+
 export const adminApi = {
   users: (params: { page?: number; size?: number }) =>
     http.get<PageResponse<UserResponse>>('/admin/users', { params }).then((r) => r.data),
@@ -57,6 +79,8 @@ export const adminApi = {
     http.post<void>(`/admin/doctors/${id}/approve`).then((r) => r.data),
   reject: (id: number) =>
     http.post<void>(`/admin/doctors/${id}/reject`).then((r) => r.data),
+  deleteDoctor: (id: number) =>
+    http.delete<void>(`/admin/doctors/${id}`).then((r) => r.data),
   stats: () =>
     http.get<StatsResponse>('/admin/stats').then((r) => r.data),
 };

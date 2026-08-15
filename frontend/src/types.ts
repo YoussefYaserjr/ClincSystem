@@ -64,6 +64,18 @@ export interface UserResponse {
   role: Role;
 }
 
+export interface MedicalRecordResponse {
+  id: number;
+  patientId: number;
+  patientName: string;
+  doctorId: number;
+  doctorName: string;
+  diagnosis: string;
+  prescription: string;
+  notes: string;
+  createdAt: string;
+}
+
 export interface StatsResponse {
   totalUsers: number;
   totalPatients: number;
