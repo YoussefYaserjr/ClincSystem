@@ -33,6 +33,7 @@ class AuthServiceImplTest {
     private PasswordEncoder passwordEncoder;
     private JwtService jwtService;
     private AuthenticationManager authenticationManager;
+    private NotificationService notificationService;
     private AuthServiceImpl service;
 
     @BeforeEach
@@ -41,7 +42,8 @@ class AuthServiceImplTest {
         passwordEncoder = mock(PasswordEncoder.class);
         jwtService = mock(JwtService.class);
         authenticationManager = mock(AuthenticationManager.class);
-        service = new AuthServiceImpl(userRepository, passwordEncoder, jwtService, authenticationManager);
+        notificationService = mock(NotificationService.class);
+        service = new AuthServiceImpl(userRepository, passwordEncoder, jwtService, authenticationManager, notificationService);
     }
 
     private RegisterRequest patientRequest(String email) {
@@ -148,6 +150,7 @@ class AuthServiceImplTest {
         assertThat(response.getToken()).isEqualTo("jwt-token");
         assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        verify(notificationService).userLoggedIn(user);
     }
 
     @Test

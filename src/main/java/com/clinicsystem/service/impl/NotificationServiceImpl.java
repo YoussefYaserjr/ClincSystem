@@ -1,6 +1,7 @@
 package com.clinicsystem.service.impl;
 
 import com.clinicsystem.entity.Appointment;
+import com.clinicsystem.entity.User;
 import com.clinicsystem.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -10,6 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +28,14 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Value("${app.notifications.from:no-reply@clinicsystem.local}")
     private String from;
+
+    @Override
+    public void userLoggedIn(User user) {
+        send(user.getEmail(), "New sign-in to your account",
+                String.format("Hi %s, we noticed a new sign-in to your clinic account at %s.%n"
+                                + "If this was you, no action is needed. If it wasn't, contact support immediately.",
+                        user.getName(), LocalDateTime.now().format(TIME_FORMAT)));
+    }
 
     @Override
     public void appointmentBooked(Appointment a) {
@@ -61,6 +73,21 @@ public class NotificationServiceImpl implements NotificationService {
                 String.format("The appointment at %s was cancelled by the %s.",
                         time(a), who));
     }
+
+    @Override
+    public void appointmentReminder(Appointment a) {
+        send(a.getPatient().getEmail(), "Reminder: appointment in 1 hour",
+                String.format("Hi %s, this is a reminder that your appointment with Dr. %s at %s starts in about an hour.",
+                        a.getPatient().getName(), a.getDoctor().getName(), time(a)));
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    private static final DateTimeFormatter TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private String time(Appointment a) {
         return a.getSchedule().getAvailableDate() + " " + a.getSchedule().getStartTime();

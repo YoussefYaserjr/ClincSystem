@@ -10,6 +10,7 @@ import com.clinicsystem.entity.enums.Role;
 import com.clinicsystem.repository.UserRepository;
 import com.clinicsystem.security.JwtService;
 import com.clinicsystem.service.AuthService;
+import com.clinicsystem.service.NotificationService;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -27,6 +28,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final NotificationService notificationService;
 
     @Override
     public AuthResponse register(RegisterRequest req) {
@@ -80,6 +82,8 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+
+        notificationService.userLoggedIn(user);
 
         return buildAuthResponse(user);
     }
