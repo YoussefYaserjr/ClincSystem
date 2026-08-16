@@ -36,6 +36,12 @@ services:
       JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@clinic.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
+      # Email notifications via SMTP (Mailtrap by default)
+      NOTIFICATIONS_ENABLED: ${NOTIFICATIONS_ENABLED:-true}
+      MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       # Distributed rate limiting (RATE_LIMIT_STORE=redis) across replicas
       RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-memory}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}

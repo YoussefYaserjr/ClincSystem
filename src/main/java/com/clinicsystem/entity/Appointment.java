@@ -25,8 +25,11 @@ public class Appointment {
     @JoinColumn(name = "doctor_id", nullable = false)
     private Doctor doctor;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "schedule_id", nullable = false, unique = true)
+    // ManyToOne: cancelled/rejected appointments keep their schedule reference,
+    // so the slot can be booked again for a new patient. Concurrency is guarded
+    // by the schedule.booked flag + pessimistic lock in AppointmentService.book().
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "schedule_id", nullable = false)
     private Schedule schedule;
 
     @Enumerated(EnumType.STRING)

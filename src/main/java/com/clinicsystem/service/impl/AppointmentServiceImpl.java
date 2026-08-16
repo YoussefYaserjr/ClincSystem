@@ -68,8 +68,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        // Unique constraint on schedule_id is the DB-level backstop
-        // if two requests somehow raced past the lock above.
+        // The pessimistic lock on the schedule row above is the concurrency
+        // guard: two racing bookings for the same slot cannot both pass.
         appointment = appointmentRepository.save(appointment);
 
         notificationService.appointmentBooked(appointment);
