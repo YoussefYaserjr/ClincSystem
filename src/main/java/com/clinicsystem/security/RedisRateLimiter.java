@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Distributed fixed-window rate limiter backed by Redis.
  *
- * <p>Every replica shares the same Redis, so the counter for a client IP is
+ * <p>Every replica shares the same Redis, so the counter for a user is
  * global across the whole cluster. The {@code INCR} + {@code EXPIRE} check is
  * wrapped in a single Lua script, which Redis executes atomically — that is
  * what makes this correct under concurrency where the in-memory variant is not.

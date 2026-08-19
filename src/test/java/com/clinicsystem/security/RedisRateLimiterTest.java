@@ -23,21 +23,21 @@ class RedisRateLimiterTest {
     void allowsRequestWhenScriptReturnsOne() {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(1L);
 
-        assertThat(limiter.tryAcquire("1.2.3.4|auth", 20, 60)).isTrue();
+        assertThat(limiter.tryAcquire("user:john@example.com|auth", 20, 60)).isTrue();
     }
 
     @Test
     void rejectsRequestWhenLimitExceeded() {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(0L);
 
-        assertThat(limiter.tryAcquire("1.2.3.4|auth", 20, 60)).isFalse();
+        assertThat(limiter.tryAcquire("user:john@example.com|auth", 20, 60)).isFalse();
     }
 
     @Test
     void treatsNullResultAsAllowed() {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(null);
 
-        assertThat(limiter.tryAcquire("1.2.3.4|auth", 20, 60)).isTrue();
+        assertThat(limiter.tryAcquire("user:john@example.com|auth", 20, 60)).isTrue();
     }
 
     @Test
@@ -45,14 +45,14 @@ class RedisRateLimiterTest {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
                 .thenThrow(new IllegalStateException("Connection refused"));
 
-        assertThat(limiter.tryAcquire("1.2.3.4|auth", 20, 60)).isTrue();
+        assertThat(limiter.tryAcquire("user:john@example.com|auth", 20, 60)).isTrue();
     }
 
     @Test
     void passesLimitAndWindowAsIndividualScriptArgs() {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(1L);
 
-        limiter.tryAcquire("1.2.3.4|auth", 20, 60);
+        limiter.tryAcquire("user:john@example.com|auth", 20, 60);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
@@ -64,11 +64,11 @@ class RedisRateLimiterTest {
     void prefixesKey() {
         when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(1L);
 
-        limiter.tryAcquire("1.2.3.4|auth", 20, 60);
+        limiter.tryAcquire("user:john@example.com|auth", 20, 60);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
         verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), any(Object[].class));
-        assertThat(keys.getValue()).containsExactly("rate-limit:1.2.3.4|auth");
+        assertThat(keys.getValue()).containsExactly("rate-limit:user:john@example.com|auth");
     }
 }

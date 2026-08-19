@@ -17,7 +17,10 @@ import java.time.LocalDateTime;
 
 /**
  * Enforces a fixed-window limit on authentication and appointment-booking
- * endpoints. The actual counting is delegated to a {@link RateLimiter}, so the
+ * endpoints. The rate-limit key is derived from the authenticated user's
+ * identity (extracted from the JWT token). For unauthenticated requests
+ * (e.g.&nbsp;login/register) the client IP is used as a fallback.
+ * The actual counting is delegated to a {@link RateLimiter}, so the
  * same filter works for a single instance (in-memory) or a replicated
  * deployment behind a load balancer (Redis). Disabled by default
  * (see {@code app.rate-limit.*}).
@@ -32,6 +35,7 @@ public class RateLimitFilter implements Filter {
     private final RateLimitProperties properties;
     private final ObjectMapper objectMapper;
     private final RateLimiter rateLimiter;
+    private final JwtService jwtService;
 
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain chain)
@@ -51,7 +55,7 @@ public class RateLimitFilter implements Filter {
             return;
         }
 
-        String key = clientIp(request) + "|" + rule.name();
+        String key = clientIdentifier(request) + "|" + rule.name();
 
         if (!rateLimiter.tryAcquire(key, rule.max(), rule.windowSeconds())) {
             response.setStatus(TOO_MANY_REQUESTS);
@@ -75,6 +79,26 @@ public class RateLimitFilter implements Filter {
             return new Rule("booking", properties.getBookingMax(), properties.getBookingWindowSeconds());
         }
         return null;
+    }
+
+    /**
+     * Resolves the rate-limit bucket key. Tries to extract the user identity
+     * (email) from the JWT Bearer token first; falls back to the client IP
+     * when no valid token is present (e.g.&nbsp;unauthenticated endpoints).
+     */
+    private String clientIdentifier(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                String userId = jwtService.extractUsername(authHeader.substring(7));
+                if (userId != null) {
+                    return "user:" + userId;
+                }
+            } catch (Exception ignored) {
+                // Invalid/expired token — fall through to IP-based key
+            }
+        }
+        return "ip:" + clientIp(request);
     }
 
     private String clientIp(HttpServletRequest request) {

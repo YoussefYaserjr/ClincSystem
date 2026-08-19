@@ -1,6 +1,7 @@
 package com.clinicsystem.config;
 
 import com.clinicsystem.security.JwtAuthFilter;
+import com.clinicsystem.security.JwtService;
 import com.clinicsystem.security.RateLimiter;
 import com.clinicsystem.security.RateLimitFilter;
 import com.clinicsystem.security.RateLimitProperties;
@@ -30,6 +31,7 @@ public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
     private final JwtAuthFilter jwtAuthFilter;
+    private final JwtService jwtService;
     private final ObjectMapper objectMapper;
     private final RateLimitProperties rateLimitProperties;
     private final RateLimiter rateLimiter;
@@ -55,7 +57,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // Constructed inline (not a @Bean) so Spring Boot does not also register
         // it as a servlet filter — otherwise it would run twice per request.
-        RateLimitFilter rateLimitFilter = new RateLimitFilter(rateLimitProperties, objectMapper, rateLimiter);
+        RateLimitFilter rateLimitFilter = new RateLimitFilter(rateLimitProperties, objectMapper, rateLimiter, jwtService);
 
         http
                 .csrf(csrf -> csrf.disable())
